@@ -31,7 +31,7 @@ docker pull unfoldingword/data-tracking-import
 
 ### Run
 ```commandline
-docker run --rm --env-file .env -it unfoldingword/data-tracking-import python progress_bible.py
+docker run --rm --env-file .env -it unfoldingword/data-tracking-importer python progress_bible.py
 ```
 
 ## Development
