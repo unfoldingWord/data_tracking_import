@@ -4,25 +4,62 @@ from time import time
 from sqlalchemy import create_engine
 # Used by SQLAlchemy
 import pymysql
+import os
+import logging
 
 
 class SILAPIImporter:
     def __init__(self):
-        pass
+        self.__logger = logging.getLogger()
 
-    def _get_db_connection(self, host, user, password, database, ca_file=None):
+    def _init_logger(self):
+        this_logger = logging.getLogger()
+
+        if not this_logger.hasHandlers():
+            c_handler = logging.StreamHandler()
+            if os.getenv('STAGE', False) == 'dev':
+                c_handler.setLevel(logging.DEBUG)
+                this_logger.setLevel(logging.DEBUG)
+            else:
+                c_handler.setLevel(logging.INFO)
+                this_logger.setLevel(logging.INFO)
+
+            log_format = '%(asctime)s  %(levelname)-8s %(message)s'
+            c_format = logging.Formatter(log_format, datefmt='%Y-%m-%d %H:%M:%S')
+            c_handler.setFormatter(c_format)
+
+            this_logger.addHandler(c_handler)
+
+        return this_logger
+
+    def _get_db_connection(self):
         port = 3306
+        user = os.getenv('TDB_USER')
+        password = os.getenv('TDB_PASSWORD')
+        host = os.getenv('TDB_HOST')
+        database = os.getenv('TDB_DB')
+        ca_file = os.getenv('TDB_SSL_CA_FILE')
 
         ssl_args = None
         if ca_file:
             ssl_args = {'ssl_ca': ca_file,
                         'ssl_verify_cert': True}
 
-        return create_engine(
-            url="mysql+pymysql://{0}:{1}@{2}:{3}/{4}".format(
-                user, password, host, port, database
-            ), connect_args=ssl_args
-        )
+        engine = None
+        try:
+            engine = create_engine(
+                url="mysql+pymysql://{0}:{1}@{2}:{3}/{4}".format(
+                    user, password, host, port, database
+                ), connect_args=ssl_args
+            )
+
+            self.__logger.debug(f"Connection to host '{host}' for user '{user}' created successfully.")
+
+        except Exception as ex:
+
+            self.__logger.error(f"Connection could not be made due to the following error: \n{ex}")
+
+        return engine
 
     def _create_signature(self, key, secret):
         curr_time = str(int(time()))
