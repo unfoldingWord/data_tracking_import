@@ -28,6 +28,7 @@ class ProgressBibleImport(SILAPIImporter):
 
         pb_dataframe = pd.DataFrame.from_dict(obj_json['resource'])
         pb_dataframe["pb_id"] = pb_dataframe.index + 1
+        pb_dataframe.columns = map(str.lower, pb_dataframe.columns)
 
         try:
             # Setup connection to DB
@@ -36,7 +37,7 @@ class ProgressBibleImport(SILAPIImporter):
             engine = self._get_db_connection()
 
             # This replaces the existing table with a new one, with the new data
-            table = 'progress_bible'
+            table = 'pb_language_data'
             pb_dataframe.to_sql(name=table, con=engine, if_exists='replace', index=False)
 
             self.__logger.info(f"Import of {len(pb_dataframe.index)} rows into '{database}.{table}' was successful!")

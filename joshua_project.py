@@ -52,7 +52,7 @@ class JoshuaProjectImport(SILAPIImporter):
 
         # Cross-reference with what's already in DB
         cross_ref = pd.read_sql(sql='jp_cross_ref_cntry_codes', con=engine)
-        uw_country = pd.read_sql(sql='country_data', con=engine)
+        uw_country = pd.read_sql(sql='countries', con=engine)
 
         full_country_ref = pd.merge(cross_ref, uw_country, left_on='ISO2', right_on='alpha_2_code')
         jp_data = df.merge(full_country_ref, on='ROG3', how='left')
@@ -65,10 +65,11 @@ class JoshuaProjectImport(SILAPIImporter):
         slim_jp.rename(columns={'index': 'jp_id'})
         slim_jp.rename(columns={'index': 'jp_id', "english_short_name": "Country_name", "ISO2": "Country_code"},
                        inplace=True)
+        slim_jp.columns = map(str.lower, slim_jp.columns)
 
         try:
             # Enter the result into the DB
-            table = 'slim_jp'
+            table = 'joshua_project_data'
             slim_jp.to_sql(name=table, con=engine, if_exists='replace', index=False)
 
             self.__logger.info(f"Import of {len(df.index)} rows into '{database}.{table}' was successful!")
