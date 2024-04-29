@@ -15,7 +15,8 @@ PB_KEY=<key>
 PB_SECRET=<secret>
 
 # Joshua Project
-JP_BASE_URL=<unknown>
+JP_BASE_URL=<url>
+JP_KEY=<key>
 
 # TrackingDB
 TDB_HOST=<mysql_host_name>
