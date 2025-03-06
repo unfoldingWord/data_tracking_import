@@ -58,7 +58,7 @@ class JoshuaProjectImport(SILAPIImporter):
         jp_data = df.merge(full_country_ref, on='ROG3', how='left')
         slim_jp = jp_data[
             ["PeopleID3ROG3","PeopleID3","PeopNameInCountry", "english_short_name", "ISO2", "LeastReached", "PrimaryLanguageName", "ROL3",
-             "Population"]]
+             "Population","JPScale","BibleStatus","Frontier"]]
         slim_jp = slim_jp.sort_values(by=["english_short_name", "PeopNameInCountry"])
         slim_jp.reset_index(level=0, inplace=True, drop=True)
         slim_jp.reset_index(level=0, inplace=True)
