@@ -1,11 +1,9 @@
-#!/usr/bin/python3
-
-import os
 import urllib.request
 import json
 import pandas as pd
 from dotenv import load_dotenv
 from silapiimporter import *
+from sqlalchemy import text
 
 
 class ProgressBibleImport(SILAPIImporter):
@@ -28,6 +26,7 @@ class ProgressBibleImport(SILAPIImporter):
 
         pb_dataframe = pd.DataFrame.from_dict(obj_json['resource'])
         pb_dataframe["pb_id"] = pb_dataframe.index + 1
+        pb_dataframe['IsProtectedCountry'] = pb_dataframe['IsProtectedCountry'].astype(int)
         pb_dataframe.columns = map(str.lower, pb_dataframe.columns)
 
         try:
@@ -36,14 +35,36 @@ class ProgressBibleImport(SILAPIImporter):
 
             engine = self._get_db_connection()
 
-            # This replaces the existing table with a new one, with the new data
+            # Insert or update data using upsert
             table = 'pb_language_data'
-            pb_dataframe.to_sql(name=table, con=engine, if_exists='replace', index=False)
 
-            self.__logger.info(f"Import of {len(pb_dataframe.index)} rows into '{database}.{table}' was successful!")
+            with engine.connect() as conn:
+                for index, row in pb_dataframe.iterrows():
+                    # Extract columns and build param placeholders
+                    columns = list(pb_dataframe.columns)
+                    col_str = ', '.join(columns)
+                    placeholders = ', '.join([f":{col}" for col in columns])
+
+                    # Build the ON DUPLICATE KEY UPDATE part
+                    update_values = ', '.join([f"{col} = VALUES({col})" for col in columns])
+
+                    # Create the parameterized query
+                    query = text(f"""
+                        INSERT INTO `uw-data-tracking`.{table} ({col_str})
+                        VALUES ({placeholders})
+                        ON DUPLICATE KEY UPDATE {update_values};
+                    """)
+
+                    # Create the dictionary of parameters (convert NaNs to None)
+                    values_dict = {col: (val if pd.notna(val) else None) for col, val in row.items()}
+
+                    # Execute the query
+                    with engine.begin():
+                        conn.execute(query, values_dict)
+
+            self.__logger.info(f"Upsert of {len(pb_dataframe.index)} rows into '{database}.{table}' was successful!")
 
         except Exception as ex:
-
             self.__logger.error(f"Connection could not be made due to the following error: \n{ex}")
 
 

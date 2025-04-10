@@ -2,8 +2,6 @@ import hmac
 from hashlib import sha1
 from time import time
 from sqlalchemy import create_engine
-# Used by SQLAlchemy
-import pymysql
 import os
 import logging
 
@@ -38,21 +36,13 @@ class SILAPIImporter:
         password = os.getenv('TDB_PASSWORD')
         host = os.getenv('TDB_HOST')
         database = os.getenv('TDB_DB')
-        ca_file = os.getenv('TDB_SSL_CA_FILE')
-
-        ssl_args = None
-        if ca_file:
-            ssl_args = {'ssl_ca': ca_file,
-                        'ssl_verify_cert': True}
-
         engine = None
         try:
             engine = create_engine(
                 url="mysql+pymysql://{0}:{1}@{2}:{3}/{4}".format(
                     user, password, host, port, database
-                ), connect_args=ssl_args
+                )
             )
-
             self.__logger.debug(f"Connection to host '{host}' for user '{user}' created successfully.")
 
         except Exception as ex:
