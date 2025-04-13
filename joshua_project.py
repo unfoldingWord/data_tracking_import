@@ -1,10 +1,10 @@
-import os
-
-from silapiimporter import *
 import urllib.request
 import json
+import os
 import pandas as pd
+from silapiimporter import SILAPIImporter
 from dotenv import load_dotenv
+from sqlalchemy import text
 
 
 class JoshuaProjectImport(SILAPIImporter):
@@ -42,10 +42,17 @@ class JoshuaProjectImport(SILAPIImporter):
         return df
 
     def import_data(self):
-        database = os.getenv('TDB_DB')
-
         # Pull data from API
         df = self.pull_from_api()
+
+        # Check for duplicates in the DataFrame
+        duplicate_check = df.groupby('PeopleID3ROG3').size().reset_index(name='the_count')
+        duplicates = duplicate_check[duplicate_check['the_count'] > 1]
+
+        # If duplicates are found, raise an exception with the first duplicate
+        if not duplicates.empty:
+            raise Exception(
+                f"Duplicate found! The first duplicate row has a 'the_count' value greater than 1: {duplicates.iloc[0]}")
 
         # Setup DB conn
         engine = self._get_db_connection()
@@ -56,26 +63,44 @@ class JoshuaProjectImport(SILAPIImporter):
 
         full_country_ref = pd.merge(cross_ref, uw_country, left_on='ISO2', right_on='alpha_2_code')
         jp_data = df.merge(full_country_ref, on='ROG3', how='left')
-        slim_jp = jp_data[
-            ["PeopleID3ROG3","PeopleID3","PeopNameInCountry", "english_short_name", "ISO2", "LeastReached", "PrimaryLanguageName", "ROL3",
-             "Population","JPScale","BibleStatus","Frontier"]]
+        slim_jp = jp_data[[
+            "PeopleID3ROG3", "PeopleID3", "PeopNameInCountry", "english_short_name", "ISO2", "LeastReached",
+            "PrimaryLanguageName", "ROL3", "Population", "JPScale", "BibleStatus", "Frontier"
+        ]]
         slim_jp = slim_jp.sort_values(by=["english_short_name", "PeopNameInCountry"])
         slim_jp.reset_index(level=0, inplace=True, drop=True)
-        slim_jp.reset_index(level=0, inplace=True)
-        slim_jp.rename(columns={'index': 'jp_id'})
-        slim_jp.rename(columns={'index': 'jp_id', "english_short_name": "Country_name", "ISO2": "Country_code"},
-                       inplace=True)
+        slim_jp.rename(columns={"english_short_name": "country_name", "ISO2": "country_code"}, inplace=True)
         slim_jp.columns = map(str.lower, slim_jp.columns)
 
         try:
-            # Enter the result into the DB
+            # Insert or update data using upsert
             table = 'joshua_project_data'
-            slim_jp.to_sql(name=table, con=engine, if_exists='replace', index=False)
+            database = os.getenv('TDB_DB')
 
-            self.__logger.info(f"Import of {len(df.index)} rows into '{database}.{table}' was successful!")
+            # Iterate through the DataFrame and upsert the rows
+            with engine.connect() as conn:
+                for index, row in slim_jp.iterrows():
+                    columns = list(slim_jp.columns)
+                    col_str = ', '.join(columns)
+                    placeholders = ', '.join([f":{col}" for col in columns])
+
+                    # Build the ON DUPLICATE KEY UPDATE part
+                    update_values = ', '.join([f"{col} = VALUES({col})" for col in columns])
+
+                    # Create the parameterized query
+                    query = text(f"""
+                        INSERT INTO `uw-data-tracking`.{table} ({col_str})
+                        VALUES ({placeholders})
+                        ON DUPLICATE KEY UPDATE {update_values};
+                    """)
+                    values_dict = {col: (val if pd.notna(val) else None) for col, val in row.items()}
+                    with engine.begin():
+                        conn.execute(query, values_dict)
+
+            self.__logger.info(f"Upsert of {len(slim_jp.index)} rows into '{database}.{table}' was successful!")
 
         except Exception as ex:
-            self.__logger.error(f"Connection could not be made due to the following error: \n{ex}")
+            self.__logger.error(f"Error during upsert: {ex}")
 
 
 if __name__ == '__main__':
