@@ -79,25 +79,54 @@ class JoshuaProjectImport(SILAPIImporter):
 
             # Iterate through the DataFrame and upsert the rows
             with engine.connect() as conn:
+                num_inserts = 0
+                num_updates = 0
                 for index, row in slim_jp.iterrows():
                     columns = list(slim_jp.columns)
-                    col_str = ', '.join(columns)
-                    placeholders = ', '.join([f":{col}" for col in columns])
+                    primary_key_col = 'peopleid3rog3'  # Assuming this is your primary key
 
-                    # Build the ON DUPLICATE KEY UPDATE part
-                    update_values = ', '.join([f"{col} = VALUES({col})" for col in columns])
-
-                    # Create the parameterized query
-                    query = text(f"""
-                        INSERT INTO `uw-data-tracking`.{table} ({col_str})
-                        VALUES ({placeholders})
-                        ON DUPLICATE KEY UPDATE {update_values};
+                    # Fetch existing row
+                    select_query = text(f"""
+                        SELECT {', '.join(columns)}
+                        FROM `uw-data-tracking`.{table}
+                        WHERE {primary_key_col} = :pk
                     """)
-                    values_dict = {col: (val if pd.notna(val) else None) for col, val in row.items()}
-                    with engine.begin():
-                        conn.execute(query, values_dict)
+                    existing_row = conn.execute(select_query, {"pk": row[primary_key_col]}).fetchone()
 
-            self.__logger.info(f"Upsert of {len(slim_jp.index)} rows into '{database}.{table}' was successful!")
+                    # Build dict of non-NaN values for current row
+                    current_row_dict = {col: (val if pd.notna(val) else None) for col, val in row.items()}
+
+                    update_needed = False
+                    if existing_row is None:
+                        update_needed = True  # No existing row, need to insert
+                        num_inserts += 1
+                    else:
+                        existing_row_dict = dict(existing_row._mapping)
+                        for col in columns:
+                            if existing_row_dict.get(col) != current_row_dict.get(col):
+                                self.__logger.info((f'Column {col} of row with key {existing_row_dict["peopleid3rog3"]}'
+                                                    f' has changed. previous value: {existing_row_dict.get(col)} '
+                                                    f'current value: {current_row_dict.get(col)}'))
+                                update_needed = True
+                                num_updates += 1
+                                break  # As soon as one difference is found, we update
+
+                    if update_needed:
+                        # Create the parameterized UPSERT query
+                        col_str = ', '.join(columns)
+                        placeholders = ', '.join([f":{col}" for col in columns])
+                        update_values = ', '.join([f"{col} = VALUES({col})" for col in columns])
+
+                        query = text(f"""
+                            INSERT INTO `uw-data-tracking`.{table} ({col_str})
+                            VALUES ({placeholders})
+                            ON DUPLICATE KEY UPDATE {update_values};
+                        """)
+                        with engine.begin():
+                            conn.execute(query, current_row_dict)
+
+            self.__logger.info((f"Inserted {num_inserts} rows and updated {num_updates} rows "
+                                f"of '{database}.{table}' successfully!"))
 
         except Exception as ex:
             self.__logger.error(f"Error during upsert: {ex}")
