@@ -73,11 +73,11 @@ class JoshuaProjectImport(SILAPIImporter):
         slim_jp.columns = map(str.lower, slim_jp.columns)
 
         try:
-            # Insert or update data using upsert
+            # Insert or update data using explicit INSERT and UPDATE
             table = 'joshua_project_data'
-            database = os.getenv('TDB_DB')
+            database = os.getenv('TDB_DB')  # Reintroduce database for logging
 
-            # Iterate through the DataFrame and upsert the rows
+            # Iterate through the DataFrame and explicitly insert or update the rows
             with engine.connect() as conn:
                 num_inserts = 0
                 num_updates = 0
@@ -96,40 +96,49 @@ class JoshuaProjectImport(SILAPIImporter):
                     # Build dict of non-NaN values for current row
                     current_row_dict = {col: (val if pd.notna(val) else None) for col, val in row.items()}
 
-                    update_needed = False
+                    # If no existing row, we insert
                     if existing_row is None:
-                        update_needed = True  # No existing row, need to insert
                         num_inserts += 1
+                        col_str = ', '.join(columns)
+                        placeholders = ', '.join([f":{col}" for col in columns])
+
+                        insert_query = text(f"""
+                            INSERT INTO `uw-data-tracking`.{table} ({col_str})
+                            VALUES ({placeholders});
+                        """)
+                        conn.execute(insert_query, current_row_dict)
                     else:
+                        # If existing row is found, we check if there's any difference and update
+                        update_needed = False
                         existing_row_dict = dict(existing_row._mapping)
                         for col in columns:
                             if existing_row_dict.get(col) != current_row_dict.get(col):
-                                self.__logger.info((f'Column {col} of row with key {existing_row_dict["peopleid3rog3"]}'
-                                                    f' has changed. previous value: {existing_row_dict.get(col)} '
-                                                    f'current value: {current_row_dict.get(col)}'))
+                                self.__logger.info(f"Column {col} of row with key {existing_row_dict['peopleid3rog3']}"
+                                                   f" has changed. previous value: {existing_row_dict.get(col)} "
+                                                   f"current value: {current_row_dict.get(col)}")
                                 update_needed = True
                                 num_updates += 1
                                 break  # As soon as one difference is found, we update
 
-                    if update_needed:
-                        # Create the parameterized UPSERT query
-                        col_str = ', '.join(columns)
-                        placeholders = ', '.join([f":{col}" for col in columns])
-                        update_values = ', '.join([f"{col} = VALUES({col})" for col in columns])
+                        if update_needed:
+                            # Create the UPDATE query
+                            set_values = ', '.join([f"{col} = :{col}" for col in columns if col != primary_key_col])
+                            update_query = text(f"""
+                                UPDATE `uw-data-tracking`.{table}
+                                SET {set_values}
+                                WHERE {primary_key_col} = :peopleid3rog3
+                            """)
+                            # Explicitly ensure the primary key is included for update
+                            current_row_dict[primary_key_col] = row[
+                                primary_key_col]  # Include pk in the dictionary for the UPDATE
+                            conn.execute(update_query, current_row_dict)
+                conn.commit()
 
-                        query = text(f"""
-                            INSERT INTO `uw-data-tracking`.{table} ({col_str})
-                            VALUES ({placeholders})
-                            ON DUPLICATE KEY UPDATE {update_values};
-                        """)
-                        with engine.begin():
-                            conn.execute(query, current_row_dict)
-
-            self.__logger.info((f"Inserted {num_inserts} rows and updated {num_updates} rows "
-                                f"of '{database}.{table}' successfully!"))
+            self.__logger.info(
+                f"Inserted {num_inserts} rows and updated {num_updates} rows successfully into '{database}.{table}'!")
 
         except Exception as ex:
-            self.__logger.error(f"Error during upsert: {ex}")
+            self.__logger.error(f"Error during insert/update: {ex}")
 
 
 if __name__ == '__main__':
