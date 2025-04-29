@@ -25,7 +25,6 @@ class ProgressBibleImport(SILAPIImporter):
         obj_json = json.loads(contents)
 
         pb_dataframe = pd.DataFrame.from_dict(obj_json['resource'])
-        pb_dataframe["pb_id"] = pb_dataframe.index + 1
         pb_dataframe['IsProtectedCountry'] = pb_dataframe['IsProtectedCountry'].astype(int)
         pb_dataframe.columns = map(str.lower, pb_dataframe.columns)
 
@@ -44,7 +43,7 @@ class ProgressBibleImport(SILAPIImporter):
                 for index, row in pb_dataframe.iterrows():
                     # Extract columns and build param placeholders
                     columns = list(pb_dataframe.columns)
-                    primary_key_col = 'pb_id'
+                    primary_key_col = 'languagecode'
 
                     # Fetch existing row
                     select_query = text(f"""
