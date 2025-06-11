@@ -133,6 +133,7 @@ class JoshuaProjectImport(SILAPIImporter):
                                 primary_key_col]  # Include pk in the dictionary for the UPDATE
                             conn.execute(update_query, current_row_dict)
                 conn.commit()
+                self.__logger.info(“commit complete.”)
 
             self.__logger.info(
                 f"Inserted {num_inserts} rows and updated {num_updates} rows successfully into '{database}.{table}'!")
