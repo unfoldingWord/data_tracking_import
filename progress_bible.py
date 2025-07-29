@@ -14,15 +14,13 @@ class ProgressBibleImport(SILAPIImporter):
 
     def import_data(self):
         key = os.getenv('PB_KEY')
-        secret = os.getenv('PB_SECRET')
-        base_url = os.getenv('PB_BASE_URL')
+        base_url = os.getenv('PB_AAG_URL')
+        url = f"{base_url}?file=AllAccess.json"
 
-        api_sig = self._create_signature(key, secret)
+        req = urllib.request.Request(url)
+        req.add_header("X-DreamFactory-API-Key", key)
 
-        url = f"{base_url}/?api_key={key}&api_sig={api_sig}&file=AllAccess.json"
-
-        contents = urllib.request.urlopen(url).read()
-        obj_json = json.loads(contents)
+        obj_json = json.loads(urllib.request.urlopen(req).read())
 
         pb_dataframe = pd.DataFrame.from_dict(obj_json['resource'])
         pb_dataframe['IsProtectedCountry'] = pb_dataframe['IsProtectedCountry'].astype(int)
