@@ -83,6 +83,7 @@ class ProgressBibleImport(SILAPIImporter):
                         with engine.begin():
                             conn.execute(query, current_row_dict)
                 conn.commit()
+                self.__logger.info("commit complete.")
 
             self.__logger.info(f"Inserted {num_inserts} rows and updated {num_updates} rows successfully into '{database}.{table}'!")
 
