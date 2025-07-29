@@ -1,4 +1,4 @@
-FROM python:alpine
+FROM python:bullseye
 
 WORKDIR /app
 
@@ -16,7 +16,7 @@ ADD https://truststore.pki.rds.amazonaws.com/us-west-2/us-west-2-bundle.pem ./aw
 
 # Run as non-root user
 ARG user_id=3046
-RUN addgroup -g ${user_id} -S data_tracker && adduser -u ${user_id} -S -G data_tracker data_tracker
+RUN groupadd -g ${user_id} data_tracker && useradd -u ${user_id} -g data_tracker data_tracker
 # data_tracker user needs access to the AWS CA certificate
 RUN chown -R data_tracker:data_tracker ./aws-ssl-certs
 
