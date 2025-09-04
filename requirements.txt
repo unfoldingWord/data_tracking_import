@@ -6,6 +6,15 @@ python-dateutil
 python-dotenv
 pytz
 six
-SQLAlchemy
 typing_extensions
 tzdata
+
+eventregistry
+SQLAlchemy
+requests
+gspread
+gspread_dataframe
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client

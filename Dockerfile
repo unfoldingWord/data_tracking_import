@@ -38,6 +38,7 @@ COPY silapiimporter.py .
 COPY progress_bible.py .
 COPY joshua_project.py .
 COPY main.py .
+COPY impact_metric_scraper/ .
 
 # Run as non-root user
 RUN chown -R nonroot:nonroot /app/
