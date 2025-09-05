@@ -3,11 +3,13 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from dotenv import load_dotenv
+from functions import get_logger
 
 #########################################################################################################
 #                       Scraping the Google Folder for the Case Study and White Papers
 #########################################################################################################
 # --- Load environment variables from .env file ---
+load_dotenv()
 
 # --- Configuration ---
 # Path to your downloaded service account JSON key file
@@ -25,16 +27,18 @@ FOLDER_ID = folder_ids_raw.split(",") if folder_ids_raw else []
 folder_name_raw = os.getenv("GOOGLE_FOLDER_NAME")
 FOLDER_NAME = folder_name_raw.split(",") if folder_name_raw else []
 
+mylogger = get_logger()
+
 def get_drive_service_account():
     """Authenticates with Google Drive API using a service account."""
     try:
         creds = service_account.Credentials.from_service_account_file(
             SERVICE_ACCOUNT_FILE, scopes=SCOPES)
         service = build('drive', 'v3', credentials=creds)
-        print("Successfully authenticated with Google Drive API using service account.")
+        mylogger.info("Successfully authenticated with Google Drive API using service account.")
         return service
     except Exception as e:
-        print(f"Error authenticating with service account: {e}")
+        mylogger.exception(f"Error authenticating with service account: {e}")
         return None
 
 def count_items_in_shared_drive_folder(service, shared_drive_id, folder_id, folder_name):
@@ -43,7 +47,7 @@ def count_items_in_shared_drive_folder(service, shared_drive_id, folder_id, fold
     on a Google Shared Drive. Excludes subfolders and trashed items.
     """
     if not service:
-        print("Drive service not available. Cannot count items.")
+        mylogger.critical("Drive service not available. Cannot count items.")
         return None
 
     item_count = 0
@@ -81,20 +85,20 @@ def count_items_in_shared_drive_folder(service, shared_drive_id, folder_id, fold
         return item_count
 
     except HttpError as error:
-        print(f'An HTTP error occurred: {error}')
+        mylogger.exception(f'An HTTP error occurred: {error}')
         # Common errors:
         # 403: "User does not have sufficient permissions for this file." - Service account needs access.
         # 404: "File not found." - Check folder_id or shared_drive_id.
         return None
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        mylogger.exception(f"An unexpected error occurred: {e}")
         return None
 
 
 if __name__ == '__main__':
     if not os.path.exists(SERVICE_ACCOUNT_FILE):
-        print(f"Error: Service account key file not found at {SERVICE_ACCOUNT_FILE}")
-        print("Please download your service account JSON key and update the SERVICE_ACCOUNT_FILE path.")
+        mylogger.critical(f"Service account key file not found at {SERVICE_ACCOUNT_FILE}")
+        mylogger.critical("Please download your service account JSON key and update the SERVICE_ACCOUNT_FILE path.")
     else:
         drive_service = get_drive_service_account()
         if drive_service:
@@ -106,10 +110,12 @@ if __name__ == '__main__':
                                                            folder_name_single)
                 if count is not None:  # Only store if the counting was successful
                     folder_counts[folder_name_single] = count
-            print("\nSuccessfully pulled data from Google Drive:")
-            print("\n--- Summary of Folder Counts ---")
+
+            mylogger.info("\nSuccessfully pulled data from Google Drive")
+            mylogger.debug("\n--- Summary of Folder Counts ---")
+
             for name, count in folder_counts.items():
-                print(f"Folder '{name}': {count} documents")
+                mylogger.debug(f"Folder '{name}': {count} documents")
 
             # Now you can access the counts like this:
             case_study_count = folder_counts.get('Case Study')  # Use .get() to avoid KeyError if name not found

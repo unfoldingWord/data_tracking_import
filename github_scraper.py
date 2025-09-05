@@ -2,6 +2,9 @@ import requests
 import pandas as pd
 import os
 from dotenv import load_dotenv # Import load_dotenv
+from functions import get_logger
+
+load_dotenv()
 
 # --- Load environment variables from .env file --
 # --- Configuration ---
@@ -13,6 +16,8 @@ HEADERS = {
     "Authorization": f"token {GITHUB_TOKEN}"
 }
 
+mylogger = get_logger()
+
 def get_repos_by_topic(topic, per_page=100):
     """
     Fetches repositories associated with a given topic using the GitHub Search API.
@@ -22,7 +27,7 @@ def get_repos_by_topic(topic, per_page=100):
     page = 1
     while True:
         url = f"{BASE_URL}/search/repositories?q=topic:{topic}&per_page={per_page}&page={page}"
-        #print(f"Fetching page {page}...")
+        mylogger.debug(f"Fetching page {page}...")
         response = requests.get(url, headers=HEADERS)
 
         if response.status_code == 200:
@@ -36,8 +41,9 @@ def get_repos_by_topic(topic, per_page=100):
             else:
                 break
         else:
-            print(f"Error fetching data: {response.status_code} - {response.text}")
+            mylogger.error(f"Could not fetch data: {response.status_code} - {response.text}")
             break
+
     return all_repos_data
 
 def get_repo_details(owner, repo_name):
@@ -49,16 +55,16 @@ def get_repo_details(owner, repo_name):
     if response.status_code == 200:
         return response.json()
     else:
-        print(f"Error fetching details for {owner}/{repo_name}: {response.status_code} - {response.text}")
+        mylogger.error(f"Could not fetch details for {owner}/{repo_name}: {response.status_code} - {response.text}")
         return None
 
 def main(TOPIC):
-    #print(f"Searching for repositories with topic: '{TOPIC}'")
+    mylogger.debug(f"Searching for repositories with topic: '{TOPIC}'")
     repos_summary = get_repos_by_topic(TOPIC)
-    #print(f"Found {len(repos_summary)} repositories with topic '{TOPIC}'.")
+    mylogger.debug(f"Found {len(repos_summary)} repositories with topic '{TOPIC}'.")
 
     if not repos_summary:
-        print("No repositories found for the given topic.")
+        mylogger.info(f"No repositories found for the given topic of {TOPIC}")
         return
 
     # Extract relevant metadata and store in a list of dictionaries
@@ -91,7 +97,7 @@ def main(TOPIC):
 
     # Convert to Pandas DataFrame
     df = pd.DataFrame(repo_metadata_list)
-    print(f"\nDataFrame successfully created for {TOPIC}: {df.shape[0]} rows captured")
+    mylogger.info(f"DataFrame successfully created for {TOPIC}: {df.shape[0]} rows captured")
     return df
 
 if __name__ == "__main__":

@@ -2,14 +2,17 @@ import gspread
 import os
 from gspread_dataframe import get_as_dataframe
 from google.oauth2 import service_account
+from functions import get_logger
 
 from dotenv import load_dotenv # Import load_dotenv
+
+mylogger = get_logger()
 
 #########################################################################################################
 #                       Scraping Several Google Sheets to Pull the data together
 #########################################################################################################
 # --- Load environment variables from .env file ---
-#load_dotenv() # This line loads the variables
+load_dotenv() # This line loads the variables
 
 # --- Configuration ---
 # Path to your downloaded service account JSON key file
@@ -25,17 +28,18 @@ SPREADSHEET_NAME = os.getenv('OPEN_RESOURCE_SPREADSHEET_NAME')  # Replace with y
 WORKSHEET_NAME = os.getenv('WORKSHEET_NAME') # Replace with your worksheet's name, or use index (e.g., 0 for the first sheet)
 
 # --- Authentication ---
+
 try:
     creds = service_account.Credentials.from_service_account_file(
         SERVICE_ACCOUNT_FILE,
         scopes=SCOPE,  # same scopes you used before
     )
     client = gspread.authorize(creds)
-    print("Authentication successful!")
+    mylogger.info("Authentication successful!")
 except Exception as e:
-    print(f"Authentication failed: {e}")
-    print("Please ensure your SERVICE_ACCOUNT_FILE path is correct and the JSON file is valid.")
-    print("Also, check if the Google Sheets API and Google Drive API are enabled in your Google Cloud Project.")
+    mylogger.critical(f"Authentication failed: {e}")
+    mylogger.critical("Please ensure your SERVICE_ACCOUNT_FILE path is correct and the JSON file is valid.")
+    mylogger.critical("Also, check if the Google Sheets API and Google Drive API are enabled in your Google Cloud Project.")
     exit()
 
 # --- Accessing and Reading Data ---
@@ -51,17 +55,14 @@ try:
     # get_as_dataframe handles headers and empty rows/columns nicely.
     df = get_as_dataframe(worksheet)
 
-    print(f"\nSuccessfully pulled data from '{SPREADSHEET_NAME}' spreadsheet: with {df.shape[0]} "
-          f"rows pulled.")
+    mylogger.info(f"Successfully pulled data from '{SPREADSHEET_NAME}' spreadsheet: with {df.shape[0]} rows pulled.")
 
 except gspread.exceptions.SpreadsheetNotFound:
-    print(f"Error: Spreadsheet '{SPREADSHEET_NAME}' not found. Check the name and sharing permissions.")
+    mylogger.error(f"Error: Spreadsheet '{SPREADSHEET_NAME}' not found. Check the name and sharing permissions.")
 except gspread.exceptions.WorksheetNotFound:
-    print(f"Error: Worksheet '{WORKSHEET_NAME}' not found in '{SPREADSHEET_NAME}'. Check the name.")
+    mylogger.error(f"Error: Worksheet '{WORKSHEET_NAME}' not found in '{SPREADSHEET_NAME}'. Check the name.")
 except Exception as e:
-    print(f"An unexpected error occurred: {e}")
-
-
+    mylogger.exception(f"An unexpected error occurred: {e}")
 
 def collect_metrics() -> dict:
     """

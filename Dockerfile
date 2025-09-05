@@ -11,21 +11,7 @@ RUN apk update && apk add --no-cache \
     python-${version} \
     py${version}-pip \
     py${version}-setuptools \
-    ca-certificates \
-    curl \
-    openssl
-
-# Fix certificate issue with AAA Certificate Services (Comodo/Sectigo)
-# Download the AAA Certificate Services root CA
-RUN curl -o aaa_cert_services.der "http://crt.comodoca.com/AAACertificateServices.crt" && \
-    # Convert from DER to PEM format
-    openssl x509 -inform DER -in aaa_cert_services.der -out aaa_cert_services.crt && \
-    # Remove old DER certificate
-    rm aaa_cert_services.der && \
-    # Copy crt file to the certs directory
-    mv aaa_cert_services.crt /etc/ssl/certs/ && \
-    # Update the certificate hash links
-    c_rehash /etc/ssl/certs/
+    ca-certificates
 
 # Install requirements
 # Disable caching, to keep Docker image lean
@@ -34,11 +20,18 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Install the rest of the scripts
 ADD https://truststore.pki.rds.amazonaws.com/us-west-2/us-west-2-bundle.pem ./aws-ssl-certs/
+COPY functions.py .
 COPY silapiimporter.py .
 COPY progress_bible.py .
 COPY joshua_project.py .
 COPY main.py .
-COPY impact_metric_scraper/ .
+COPY FRED_scraper.py .
+COPY github_scraper.py .
+COPY google_sheets_scraper.py .
+COPY white_pages_scraper.py .
+COPY impact_metrics_scraper.py .
+COPY imports_positive_pr.py .
+
 
 # Run as non-root user
 RUN chown -R nonroot:nonroot /app/

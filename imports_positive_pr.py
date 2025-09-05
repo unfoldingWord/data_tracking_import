@@ -12,6 +12,9 @@ from eventregistry import (
     ArticleInfoFlags,
     SourceInfoFlags,
 )
+from functions import get_logger
+
+load_dotenv()
 
 # -----------------------------
 # Config
@@ -21,6 +24,8 @@ MAX_ITEMS_30D = None        # safety cap (None = no cap; or set an int like 2000
 
 DATA_TYPES = ["news", "pr", "blog"]
 KEYWORDS_EXACT = os.getenv('PR_KEYWORDS')
+
+mylogger = get_logger()
 
 def last_n_days_bounds(n: int) -> tuple[str, str]:
     today = dt.date.today()
@@ -80,14 +85,13 @@ def normalize_articles(rows: list[dict]) -> pd.DataFrame:
     return df[keep]
 
 def main() -> pd.DataFrame:
-    load_dotenv()
     API_KEY = (os.getenv("NEWSAPI_KEY") or "").strip()
     if not API_KEY:
         raise SystemExit("Set NEWSAPI_KEY in your .env")
 
     er = EventRegistry(apiKey=API_KEY, host="https://eventregistry.org", allowUseOfArchive=True)
 
-    print(f"Fetching last {DAYS_BACK} days …")
+    mylogger.debug(f"Fetching last {DAYS_BACK} days …")
     rows = fetch_last_n_days(er, DAYS_BACK, MAX_ITEMS_30D)
 
     # de-dup by uri
@@ -99,10 +103,11 @@ def main() -> pd.DataFrame:
             seen.add(u)
             all_rows.append(r)
             added += 1
-    print(f"  got {len(rows)} (added {added} unique)")
+    mylogger.debug(f"  got {len(rows)} (added {added} unique)")
 
     df = normalize_articles(all_rows)
-    print(f"\nTotal unique articles in last {DAYS_BACK} days: {len(df)}")
+
+    mylogger.info(f"\nTotal unique articles in last {DAYS_BACK} days: {len(df)}")
 
     # Quick “which sources hit” summary
     if not df.empty:
@@ -116,11 +121,11 @@ def main() -> pd.DataFrame:
             )
             #print("\nTop sources (last 30 days):")
             with pd.option_context("display.max_colwidth", 100):
-                print(hits.head(25).to_string(index=False))
+                mylogger.debug(hits.head(25).to_string(index=False))
         # small preview
         with pd.option_context("display.max_colwidth", 120):
-            print("\nSample rows:")
-            print(df.head(10).to_string(index=False))
+            mylogger.debug("\nSample rows:")
+            mylogger.debug(df.head(10).to_string(index=False))
 
     return df
 
@@ -135,11 +140,7 @@ if __name__ == "__main__":
     drop_cols = [c for c in drop_maybe if c in df.columns]
     db_ready = df.drop(columns=drop_cols) if drop_cols else df.copy()
 
-    # Load environment variables from .env file if it exists
-    if os.path.exists('.env'):
-        load_dotenv()
-
-    #print("Loading internal data tables into pipeline.")
+    mylogger.debug("Loading internal data tables into pipeline.")
 
     # Initialize engine object to None
     engine = None
@@ -160,8 +161,7 @@ if __name__ == "__main__":
 
         # Test the connection by trying to connect
         with engine.connect() as connection:
-            print("Successfully connected to the MariaDB database using SQLAlchemy with mysql+pymysql")
-        # dialect.")
+            mylogger.debug("Successfully connected to the MariaDB database using SQLAlchemy with mysql+pymysql dialect")
 
         # Ingest
         if not db_ready.empty:
@@ -174,15 +174,16 @@ if __name__ == "__main__":
                     chunksize=10_000,
                     method="multi"
                 )
-            print(f"Successfully imported {len(db_ready):,} rows to positive_pr table.")
+
+            mylogger.info(f"Successfully imported {len(db_ready):,} rows to positive_pr table.")
         else:
-            print("No rows to import (db_ready is empty).")
+            mylogger.info("No rows to import (db_ready is empty)")
 
     except SQLAlchemyError as err:
-        print(f"Database Error: {err}")
+        mylogger.error(f"Database Error: {err}")
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        mylogger.exception(f"An unexpected error occurred: {e}")
     finally:
         if engine:
             engine.dispose()
-            #print("SQLAlchemy engine connections disposed.")
+            mylogger.debug("SQLAlchemy engine connections disposed.")

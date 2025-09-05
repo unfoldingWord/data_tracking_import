@@ -11,13 +11,12 @@ from typing import Any, Callable, Dict, List, Optional
 import pandas as pd
 from sqlalchemy import create_engine
 from sqlalchemy.types import Integer, Date
+from functions import get_logger
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ========= CONFIG =========
-
-# Where your scraper modules live (so we can `import` them by name)
-SCRIPTS_DIR = os.getenv("SCRAPERS_DIR", ".")
-if SCRIPTS_DIR not in sys.path:
-    sys.path.insert(0, SCRIPTS_DIR)
 
 # MariaDB connection via env vars
 DB_USER = os.getenv("TDB_USER")
@@ -69,6 +68,8 @@ EXPLICIT_DTYPES = {
 }
 
 # ========= IMPLEMENTATION =========
+
+mylogger = get_logger()
 
 @dataclass
 class ScriptSpec:
@@ -139,7 +140,7 @@ def _run_cli(spec: ScriptSpec) -> Dict[str, Any]:
         )
     # Optional: surface the script’s output in orchestrator logs
     if proc.stdout.strip():
-        print(f"[{spec.name} stdout]\n{proc.stdout}")
+        mylogger.debug(f"[{spec.name} stdout]\n{proc.stdout}")
     return {}  # no metrics, just side effects
 
 MODE_HANDLERS = {
@@ -177,16 +178,19 @@ def run_all(orchestrations: List[Dict[str, Any]]) -> pd.DataFrame:
     for spec_dict in orchestrations:
         spec = ScriptSpec(**spec_dict)
         handler = MODE_HANDLERS.get(spec.mode)
+
+        mylogger.info(f"- Starting '{spec.name}' collector ")
+
         if handler is None:
             errors[spec.name] = f"Unknown mode '{spec.mode}'"
             continue
         try:
             payload = handler(spec)
             collected[spec.name] = payload or {}
-            print(f"[OK] {spec.name}: collected {len(payload or {})} fields")
+            mylogger.info(f"{spec.name}: collected {len(payload or {})} fields")
         except Exception as e:
             errors[spec.name] = str(e)
-            print(f"[ERROR] {spec.name}: {e}")
+            mylogger.error(f"{spec.name}: {e}")
 
     # Merge into a single row of metrics
     merged_metrics: Dict[str, Any] = {}
@@ -212,7 +216,7 @@ def _dtype_map_for(df: pd.DataFrame) -> Dict[str, Any]:
 
 def write_to_mariadb(df: pd.DataFrame, table: str, if_exists: str = "append") -> None:
     if df.empty:
-        print("[WARN] No row produced; skipping DB write.")
+        mylogger.warn("No row produced; skipping DB write.")
         return
     # Normalize column names for MariaDB
     df = df.copy()
@@ -229,11 +233,11 @@ def write_to_mariadb(df: pd.DataFrame, table: str, if_exists: str = "append") ->
             method="multi",
             chunksize=1000,
         )
-        print(f"[OK] Wrote 1 combined row to {table}")
+        mylogger.info(f"Wrote 1 combined row to {table}")
     finally:
         engine.dispose()
 
 if __name__ == "__main__":
     df = run_all(ORCHESTRATIONS)
-    print(f"[INFO] Produced columns: {list(df.columns)}")
+    mylogger.info(f"Produced columns: {list(df.columns)}")
     write_to_mariadb(df, "impact_model_metrics", if_exists="append")

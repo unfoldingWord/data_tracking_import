@@ -1,3 +1,12 @@
+import os
+import numpy as np
+import pandas as pd
+from dotenv import load_dotenv
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import SQLAlchemyError
+
+load_dotenv()
+
 def collect_metrics() -> dict:
     """
     Computes and returns FRED summary metrics as a dict for the orchestrator.
@@ -11,14 +20,6 @@ def collect_metrics() -> dict:
       - ot_count_rolled
       - unique_language_engagement_ids
     """
-    import os
-    import numpy as np
-    import pandas as pd
-    from dotenv import load_dotenv
-    from sqlalchemy import create_engine, text
-    from sqlalchemy.exc import SQLAlchemyError
-
-    load_dotenv()
 
     # Build DB URI (matches your script’s connector settings)
     db_user = os.getenv("TDB_USER")
