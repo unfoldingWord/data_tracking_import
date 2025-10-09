@@ -1,9 +1,11 @@
+import os
 import urllib.request
 import json
 import pandas as pd
 from dotenv import load_dotenv
 from silapiimporter import *
 from sqlalchemy import text
+import ssl
 
 
 class ProgressBibleImport(SILAPIImporter):
@@ -20,7 +22,16 @@ class ProgressBibleImport(SILAPIImporter):
         req = urllib.request.Request(url)
         req.add_header("X-DreamFactory-API-Key", key)
 
-        obj_json = json.loads(urllib.request.urlopen(req).read())
+        # There are problems with the presented certificate.
+        # `SSL certificate problem: unable to get local issuer certificate`
+        # We have tried several methods, but could not get it to work
+        # Therefore, we are now simply NOT VALIDATING the certificate
+        # This is far from ideal, but I see no better option yet.
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+
+        obj_json = json.loads(urllib.request.urlopen(req, context=context).read())
 
         pb_dataframe = pd.DataFrame.from_dict(obj_json['resource'])
         pb_dataframe['IsProtectedCountry'] = pb_dataframe['IsProtectedCountry'].astype(int)
